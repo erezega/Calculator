@@ -79,6 +79,27 @@ public class ParserTests
         Assert.Equal(expected, Parse("x = i++ + (5 * 2)"));
     }
 
+    [Fact]
+    public void PostfixIncrementPlusParenthesizedProduct_WithNegativeNumber()
+    {
+        // Same line with -5: x = (i++) + ((-5) * 2)
+        // The minus is a unary operator, so -5 is a UnaryExpression around 5, not a negative number literal.
+        //
+        // AssignmentStatement (x)
+        // └── BinaryExpression (+)
+        //     ├── IncrementExpression (i, ++, postfix)
+        //     └── BinaryExpression (*)
+        //         ├── UnaryExpression (Negate)
+        //         │   └── NumberExpression 5
+        //         └── NumberExpression 2
+        var expected = new AssignmentStatement(
+            "x",
+            null,
+            Bin(PostInc("i"), BinaryOperator.Add, Bin(Neg(Num(5)), BinaryOperator.Multiply, Num(2))));
+
+        Assert.Equal(expected, Parse("x = i++ + (-5 * 2)"));
+    }
+
     // ---------- precedence and associativity ----------
 
     [Fact]

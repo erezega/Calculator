@@ -74,17 +74,7 @@ public sealed class Parser
         return token;
     }
 
-    private Token Expect(TokenType type, string description)
-    {
-        if (CurrentToken.Type != type)
-        {
-            throw Unexpected(CurrentToken, description);
-        }
-
-        return TakeCurrentTokenAndIterateNext();
-    }
-
-    // Handles: the whole line: an assignment ('=', '+=', '-=', '*=', '/=', '%=') or a standalone '++' / '--'.
+    // Handles: the whole line (the root of the tree): an assignment ('=', '+=', '-=', '*=', '/=', '%=') or a standalone '++' / '--'.
     // Example: "x += 1" → assignment (x, Add, 1);  "i++" → increment statement
     // Note:    any other line ("x", "i + 1", "5 = 3") is an error; the right side of an assignment comes from ParseExpression.
     private Statement ParseStatement()
@@ -110,27 +100,14 @@ public sealed class Parser
 
         throw new CalculatorException("Invalid statement: expected an assignment (x = 1) or an increment (x++, --x)");
     }
-    
-    // '=' → true with compound = null; '+=' → true with compound = Add; ...; any other token → false.
-    private static bool TryGetAssignmentOperator(TokenType type, out BinaryOperator? compound)
-    {
-        compound = type switch
-        {
-            TokenType.PlusAssign => BinaryOperator.Add,
-            TokenType.MinusAssign => BinaryOperator.Subtract,
-            TokenType.StarAssign => BinaryOperator.Multiply,
-            TokenType.SlashAssign => BinaryOperator.Divide,
-            TokenType.PercentAssign => BinaryOperator.Remainder,
-            _ => null,
-        };
-        return compound is not null || type == TokenType.Assign;
-    }
 
     // Handles: '+' and '-' (the lowest precedence).
     // Example: "1 + 2 - 3" → (1 + 2) - 3
     // Note:    operands come from ParseTerm; the loop reads left to right, so "10 - 3 - 2" is (10 - 3) - 2.
     private Expression ParseExpression()
     {
+        StackGuard.EnsureSufficientStack(); // each '(' comes back here, so deep nesting recurses through this method
+
         // "left" = everything parsed so far; it becomes the left side of the next '+' or '-'.
         // "x = 5": left is 5 and the loop never runs. "x = 5 + 3": left is 5, then (5 + 3).
         var left = ParseTerm();
@@ -168,6 +145,8 @@ public sealed class Parser
     // Note:    calls itself for the operand, so operators can repeat: "- -5" is -(-5). Anything else goes to ParsePostfix.
     private Expression ParseUnary()
     {
+        StackGuard.EnsureSufficientStack();
+
         var token = CurrentToken;
         switch (token.Type)
         {
@@ -190,7 +169,10 @@ public sealed class Parser
 
     // Handles: postfix '++' and '--'.
     // Example: "i++" → i++ (postfix increment)
-    // Note:    a loop rather than one optional operator, so "i++++" gets the clear "must be a variable" error.
+    // Note1:    a loop rather than one optional operator, so "i++++" gets the clear "must be a variable" error.
+    // Note2:    Must come after ParseUnary() because postfix binds tighter than prefix.
+    // For example: -i++   means   -(i++)     ✅  increment i, then negate the value
+    //                     not     (-i)++     ❌  "increment -i" makes no sense
     private Expression ParsePostfix()
     {
         var operand = ParsePrimary();
@@ -229,6 +211,22 @@ public sealed class Parser
         }
     }
 
+    // '=' → true with compound = null; '+=' → true with compound = Add; ...; any other token → false.
+    private static bool TryGetAssignmentOperator(TokenType type, out BinaryOperator? compound)
+    {
+        compound = type switch
+        {
+            TokenType.PlusAssign => BinaryOperator.Add,
+            TokenType.MinusAssign => BinaryOperator.Subtract,
+            TokenType.StarAssign => BinaryOperator.Multiply,
+            TokenType.SlashAssign => BinaryOperator.Divide,
+            TokenType.PercentAssign => BinaryOperator.Remainder,
+            _ => null,
+        };
+        return compound is not null || type == TokenType.Assign;
+    }
+    
+    // Checks if the operand is a variable and not a number and creates new IncrementExpression
     // "(i)++" is fine: parentheses produce no node, so the operand is still a VariableExpression.
     // "5++", "(i + 1)++", "i++++" and "++i++" are rejected.
     private static IncrementExpression MakeIncrementExpression(Token op, Expression operand, bool isPrefix)
@@ -244,6 +242,16 @@ public sealed class Parser
         return new IncrementExpression(variable.Name, incrementOperator, isPrefix);
     }
 
+    private Token Expect(TokenType type, string description)
+    {
+        if (CurrentToken.Type != type)
+        {
+            throw Unexpected(CurrentToken, description);
+        }
+
+        return TakeCurrentTokenAndIterateNext();
+    }
+    
     private static CalculatorException Unexpected(Token found, string expected)
     {
         var what = found.Type == TokenType.End ? "end of line" : $"'{found.Text}'";
