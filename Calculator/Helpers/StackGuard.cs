@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace Calculator;
+namespace Calculator.Helpers;
 
 /// <summary>
 /// Protects the recursive methods (the parser and the evaluator) from running out of stack.
