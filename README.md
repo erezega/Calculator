@@ -135,6 +135,8 @@ Sorts the variables by name and prints `(name=value,name=value)`.
 | Standalone increment / decrement | `i++`, `++i`, `i--`, `--i` |
 | Blank or whitespace-only line | skipped |
 
+Any of these may end with one optional `;`: `x = 5;` is the same as `x = 5`.
+
 **In expressions:** integer literals, variables, parentheses, binary `+ - * / %`, unary `+` and `-`, prefix and postfix `++` and `--`. Whitespace between tokens is optional.
 
 **Not supported:** floating-point numbers, bitwise, comparison and logical operators, the conditional operator `?:`, chained assignment (`a = b = 5`), function calls, and more than one statement per line.
@@ -186,6 +188,8 @@ Evaluation stops at the first error. Nothing is printed to standard output; the 
 | Kind | Example line | Message |
 |---|---|---|
 | Unknown character | `x = 1 # 2` | `Line 1: Unexpected character '#' at column 7` |
+| Invisible character or emoji | `x = 😀` | `Line 1: Unexpected character U+1F600 at column 5` |
+| More than one `;` | `x = 5;;` | `Line 1: Expected end of line but found ';' at column 7` |
 | Invalid number | `x = 12abc` | `Line 1: Invalid number '12a' at column 5` |
 | Leading zero | `x = 010` | `Line 1: Numbers with a leading zero are not supported: '010' at column 5` |
 | Number out of range | `x = 2147483648` | `Line 1: Integer literal out of range: '2147483648' at column 5` |

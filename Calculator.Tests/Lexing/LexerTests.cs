@@ -48,6 +48,7 @@ public class LexerTests
     [InlineData("%=", TokenType.PercentAssign)]
     [InlineData("(", TokenType.LeftParen)]
     [InlineData(")", TokenType.RightParen)]
+    [InlineData(";", TokenType.Semicolon)]
     public void SingleOperator(string text, TokenType expected)
     {
         var tokens = Lexer.Tokenize(text);
@@ -136,6 +137,10 @@ public class LexerTests
     [InlineData("x = 00", "Numbers with a leading zero are not supported: '00' at column 5")]
     [InlineData("x = 2147483648", "Integer literal out of range: '2147483648' at column 5")]
     [InlineData("x = 99999999999999999999", "Integer literal out of range: '99999999999999999999' at column 5")]
+    // Invisible characters and emoji are shown as a code point, not printed as-is.
+    [InlineData("x = \U0001F600", "Unexpected character U+1F600 at column 5")]   // emoji (two UTF-16 chars)
+    [InlineData("x = \u0001", "Unexpected character U+0001 at column 5")]        // control character
+    [InlineData("x = ﻿5", "Unexpected character U+FEFF at column 5")]       // byte order mark inside a line
     public void InvalidInput_Throws(string line, string expectedMessage)
     {
         var ex = Assert.Throws<CalculatorException>(() => Lexer.Tokenize(line));

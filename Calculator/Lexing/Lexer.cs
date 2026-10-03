@@ -69,9 +69,11 @@ public static class Lexer
             throw new CalculatorException($"Numbers with a leading zero are not supported: '{digits}' at column {start + 1}");
         }
 
-        // Convert the digits to an int. TryParse returns false (instead of throwing) when the value is above int.MaxValue. Example: greater than 2147483648
-        // NumberStyles.None accepts only plain digits (no sign, spaces or thousands separators). Example: " 42 " or "1,000" or "-42" () - only uses as safety net in this solution
-        // InvariantCulture makes the result independent of the machine's regional settings. Example: "1.000" '.' isn't a separator in en-US - only uses as safety net in this solution
+        // Convert the digits to an int. TryParse returns false (instead of throwing) when the value is above int.MaxValue
+        // (2147483647), i.e. for 2147483648 or more.
+        // NumberStyles.None accepts only plain digits: no sign, spaces or thousands separators (" 42 ", "1,000", "-42" are rejected).
+        // InvariantCulture makes the result independent of the machine's regional settings ("1.000" is 1000 in de-DE, invalid in en-US).
+        // 'digits' contains only 0-9 here, so these two are only a safety net in this solution.
         if (!int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var value))
         {
             throw new CalculatorException($"Integer literal out of range: '{digits}' at column {start + 1}");
@@ -122,8 +124,9 @@ public static class Lexer
             '=' => (TokenType.Assign, 1),
             '(' => (TokenType.LeftParen, 1),
             ')' => (TokenType.RightParen, 1),
+            ';' => (TokenType.Semicolon, 1),
 
-            _ => throw new CalculatorException($"Unexpected character '{c}' at column {start + 1}"),
+            _ => throw new CalculatorException($"Unexpected character {Describe(line, start)} at column {start + 1}"),
         };
 
         pos += length;
@@ -135,4 +138,21 @@ public static class Lexer
 
     // Any later character of an identifier: also allows digits (x1, count_2).
     private static bool IsIdentifierPart(char c) => IsIdentifierStart(c) || char.IsAsciiDigit(c);
+
+    // For error messages. Printable characters are shown as they are ('#'). Invisible characters (control characters,
+    // the byte order mark U+FEFF) and emoji are shown as a code point (U+1F600): printed as-is they would be blank or
+    // garbled. An emoji is two UTF-16 chars (a surrogate pair), so it is combined into one code point.
+    private static string Describe(string line, int pos)
+    {
+        var c = line[pos];
+        if (char.IsHighSurrogate(c) && pos + 1 < line.Length && char.IsLowSurrogate(line[pos + 1]))
+        {
+            return $"U+{char.ConvertToUtf32(c, line[pos + 1]):X4}";
+        }
+
+        var invisible = char.IsControl(c)
+                        || char.IsSurrogate(c)
+                        || char.GetUnicodeCategory(c) == UnicodeCategory.Format;
+        return invisible ? $"U+{(int)c:X4}" : $"'{c}'";
+    }
 }

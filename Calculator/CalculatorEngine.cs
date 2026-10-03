@@ -21,9 +21,13 @@ public static class CalculatorEngine
         var lineNumber = 0;
 
         // The lines are read one at a time (lazily): with File.ReadLines, a huge file is never loaded into memory.
-        foreach (var line in lines)
+        foreach (var rawLine in lines)
         {
             lineNumber++; // counts blank lines too, so the number matches the line in the file
+
+            // A file saved with a byte order mark (BOM) starts with the invisible character U+FEFF.
+            // File.ReadLines removes it, but standard input ("Calculator.Cli < file.txt") does not.
+            var line = lineNumber == 1 ? RemoveByteOrderMark(rawLine) : rawLine;
 
             if (string.IsNullOrWhiteSpace(line))
             {
@@ -46,4 +50,7 @@ public static class CalculatorEngine
 
         return Formatter.Format(evaluator.Variables);
     }
+
+    private static string RemoveByteOrderMark(string line) =>
+        line is { Length: > 0 } && line[0] == '﻿' ? line[1..] : line;
 }

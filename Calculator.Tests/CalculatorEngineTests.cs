@@ -40,6 +40,30 @@ public class CalculatorEngineTests
     }
 
     [Fact]
+    public void ByteOrderMark_AtTheStartOfTheInput_IsIgnored()
+    {
+        // A file saved with a BOM starts with U+FEFF; standard input does not remove it.
+        Assert.Equal("(i=1,j=2)", CalculatorEngine.Run(["﻿i = 1", "j = i + 1"]));
+    }
+
+    [Fact]
+    public void ByteOrderMark_InsideTheInput_IsAnError()
+    {
+        // Only the very start of the input can carry a BOM.
+        var ex = Assert.Throws<CalculatorException>(() => CalculatorEngine.Run(["i = 1", "﻿j = 2"]));
+
+        Assert.Equal("Line 2: Unexpected character U+FEFF at column 1", ex.Message);
+    }
+
+    [Fact]
+    public void AssignmentExample_WithSemicolons()
+    {
+        string[] lines = ["i = 0;", "j = ++i;", "x = i++ + 5;", "y = (5 + 3) * 10;", "i += y;"];
+
+        Assert.Equal("(i=82,j=1,x=6,y=80)", CalculatorEngine.Run(lines));
+    }
+
+    [Fact]
     public void VariablesAreSharedBetweenLines()
     {
         Assert.Equal("(i=2,x=11)", CalculatorEngine.Run(["i = 1", "x = i++ + (5 * 2)"]));

@@ -27,6 +27,25 @@ public class ParserTests
     }
 
     [Theory]
+    [InlineData("x = 5;", "x = 5")]
+    [InlineData("x = 5 ;", "x = 5")]
+    [InlineData("x += i++ * 2;", "x += i++ * 2")]
+    [InlineData("i++;", "i++")]
+    [InlineData("--i;", "--i")]
+    public void OptionalSemicolon_AtTheEnd_GivesTheSameTree(string withSemicolon, string without)
+    {
+        Assert.Equal(Parse(without), Parse(withSemicolon));
+    }
+
+    [Fact]
+    public void AssignOperatorFollowedByUnaryOperator()
+    {
+        // "=+" and "=-" are not operators, so the lexer gives '=' then '+' / '-': x = (+5), y = (-5).
+        Assert.Equal(new AssignmentStatement("x", null, new UnaryExpression(UnaryOperator.Plus, Num(5))), Parse("x =+ 5"));
+        Assert.Equal(new AssignmentStatement("y", null, Neg(Num(5))), Parse("y =- 5"));
+    }
+
+    [Theory]
     [InlineData("x += 1", BinaryOperator.Add)]
     [InlineData("x -= 1", BinaryOperator.Subtract)]
     [InlineData("x *= 1", BinaryOperator.Multiply)]
@@ -198,6 +217,10 @@ public class ParserTests
     [InlineData("x = ++5", "Operator '++' at column 5 can only be applied to a variable")]
     [InlineData("x = --5", "Operator '--' at column 5 can only be applied to a variable")]
     [InlineData("x = 5++", "Operator '++' at column 6 can only be applied to a variable")]
+    [InlineData("x = 5;;", "Expected end of line but found ';' at column 7")]          // only one ';'
+    [InlineData("x = 1; y = 2", "Expected end of line but found 'y' at column 8")]     // one statement per line
+    [InlineData("x = (5;)", "Expected ')' but found ';' at column 7")]                 // only at the end
+    [InlineData(";", "Expected a number, a variable or '(' but found ';' at column 1")] // not on its own
     [InlineData("x = (i + 1)++", "Operator '++' at column 12 can only be applied to a variable")]
     [InlineData("x = i++++", "Operator '++' at column 8 can only be applied to a variable")]
     [InlineData("x = ++i++", "Operator '++' at column 5 can only be applied to a variable")]

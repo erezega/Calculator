@@ -27,8 +27,9 @@ namespace Calculator.Parsing;
 ///
 /// '++' and '--' only work on a variable: "i++", "(i)++" and "++(i)" are fine; "5++" and "(i + 1)++" are errors.
 ///
-/// Formal grammar, the same rules in standard notation ('|' = or, '*' = zero or more times):
+/// Formal grammar, the same rules in standard notation ('|' = or, '*' = zero or more times, '?' = optional):
 /// <code>
+/// line       := statement ';'?                                ('?' = optional)
 /// statement  := IDENT assignOp expression | expression        (expression must be ++/-- on a variable)
 /// assignOp   := '=' | '+=' | '-=' | '*=' | '/=' | '%='
 /// expression := term (('+' | '-') term)*
@@ -43,7 +44,7 @@ public sealed class Parser
     private readonly IReadOnlyList<Token> _tokens;
     private int _pos;
     private Token CurrentToken => _tokens[_pos];
-    
+
     private Parser(IReadOnlyList<Token> tokens)
     {
         _tokens = tokens;
@@ -51,13 +52,20 @@ public sealed class Parser
 
     /// <summary>
     /// The parser's single public entry point: takes one line's tokens, returns that line's syntax tree (AST),
-    /// and throws if any tokens are left over.
+    /// and throws if any tokens are left over. One optional ';' may end the line: "x = 5;" is the same as "x = 5".
     /// </summary>
     /// <param name="tokens">Tokens of one line, ending with <see cref="TokenType.End"/> (as produced by the lexer).</param>
     public static Statement Parse(IReadOnlyList<Token> tokens)
     {
         var parser = new Parser(tokens);
         var statement = parser.ParseStatement();
+
+        // At most one ';', and only at the very end: "x = 5;;" and "x = 1; y = 2" fail on the Expect below.
+        if (parser.CurrentToken.Type == TokenType.Semicolon)
+        {
+            parser.TakeCurrentTokenAndIterateNext();
+        }
+
         parser.Expect(TokenType.End, "end of line");
         return statement;
     }
@@ -169,11 +177,10 @@ public sealed class Parser
     }
 
     // Handles: postfix '++' and '--'.
-    // Example: "i++" → i++ (postfix increment)
-    // Note1:    a loop rather than one optional operator, so "i++++" gets the clear "must be a variable" error.
-    // Note2:    Must come after ParseUnary() because postfix binds tighter than prefix.
-    // For example: -i++   means   -(i++)     ✅  increment i, then negate the value
-    //                     not     (-i)++     ❌  "increment -i" makes no sense
+    // Example: "i++" → i++ (postfix increment);  "-i++" → -(i++), not (-i)++
+    // Note:    sits below ParseUnary in the chain (ParseUnary calls it), because postfix binds tighter than prefix:
+    //          in "-i++" the ++ attaches to i first, then the minus. It is a loop rather than one optional
+    //          operator, so "i++++" gets the clear "must be a variable" error.
     private Expression ParsePostfix()
     {
         var operand = ParsePrimary();
@@ -226,20 +233,21 @@ public sealed class Parser
         };
         return compound is not null || type == TokenType.Assign;
     }
-    
-    // Checks if the operand is a variable and not a number and creates new IncrementExpression
+
+    // Checks that the operand is a variable (not a number or a larger expression) and creates the IncrementExpression.
     // "(i)++" is fine: parentheses produce no node, so the operand is still a VariableExpression.
     // "5++", "(i + 1)++", "i++++" and "++i++" are rejected.
     private static IncrementExpression MakeIncrementExpression(Token op, Expression operand, bool isPrefix)
     {
-        // "variable" was declared by the pattern in the 'if' ("is not VariableExpression variable"):
+        // "is not VariableExpression variable" checks the type and declares "variable", which is used after the if:
+        // the if throws when operand is not a variable, so after it "variable" is always set.
         if (operand is not VariableExpression variable)
         {
             throw new CalculatorException($"Operator '{op.Text}' at column {op.Position + 1} can only be applied to a variable");
         }
 
         var incrementOperator = op.Type == TokenType.PlusPlus ? IncrementOperator.Increment : IncrementOperator.Decrement;
-        
+
         return new IncrementExpression(variable.Name, incrementOperator, isPrefix);
     }
 
@@ -252,7 +260,7 @@ public sealed class Parser
 
         return TakeCurrentTokenAndIterateNext();
     }
-    
+
     private static CalculatorException Unexpected(Token found, string expected)
     {
         var what = found.Type == TokenType.End ? "end of line" : $"'{found.Text}'";

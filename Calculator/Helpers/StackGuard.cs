@@ -4,6 +4,7 @@ namespace Calculator.Helpers;
 
 /// <summary>
 /// Protects the recursive methods (the parser and the evaluator) from running out of stack.
+/// A stack overflow cannot be caught in .NET (the whole process crashes), so checking first turns a
 /// pathological line (thousands of nested parentheses, or a very long "1 + 1 + 1 + ...") into a normal error.
 /// </summary>
 internal static class StackGuard

@@ -22,6 +22,7 @@ public enum TokenType
 
     LeftParen,     // (
     RightParen,    // )
+    Semicolon,     // ;  (optional, only at the end of a line)
 
     End,           // end of the line
 }
